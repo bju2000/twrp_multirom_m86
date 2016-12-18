@@ -369,6 +369,8 @@ ifeq ($(TARGET_RECOVERY_IS_MULTIROM), true)
 
     LOCAL_CFLAGS += -DMR_REC_VERSION="\"$(MR_REC_VERSION)\""
 
+    LOCAL_CFLAGS += -DMR_DTB_DEV="\"$(MR_DTB_DEV)\""
+
 #TODO
 LOCAL_CFLAGS += -DTW_DEFAULT_ROTATION=0
 
@@ -704,8 +706,9 @@ include $(LOCAL_PATH)/tests/Android.mk \
     $(LOCAL_PATH)/otafault/Android.mk \
     $(LOCAL_PATH)/updater/Android.mk \
     $(LOCAL_PATH)/update_verifier/Android.mk \
+    $(LOCAL_PATH)/bootloader_message/Android.mk \
     $(LOCAL_PATH)/applypatch/Android.mk
-
+#kek bootl_mess
 ifeq ($(wildcard system/core/uncrypt/Android.mk),)
     include $(commands_recovery_local_path)/uncrypt/Android.mk
 endif
