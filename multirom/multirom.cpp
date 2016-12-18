@@ -548,11 +548,20 @@ bool MultiROM::initBackup(const std::string& name)
 
 	std::string boot = getRomsPath() + name;
 	normalizeROMPath(boot);
+        std::string dtb = boot;
+        dtb += "/dtb.img";
 	boot += "/boot.img";
 
 	translateToRealdata(boot);
+	translateToRealdata(dtb);
 
 	if(!fakeBootPartition(boot.c_str()))
+	{
+		restoreMounts();
+		return false;
+	}
+
+	if(!fakeDTBPartition(dtb.c_str()))
 	{
 		restoreMounts();
 		return false;
@@ -587,6 +596,7 @@ void MultiROM::deinitBackup()
 	bool hadInternalStorage = (DataManager::GetStrValue("tw_storage_path").find(REALDATA) == 0);
 
 	restoreBootPartition();
+	restoreDTBPartition();
 	restoreMounts();
 
 	DataManager::SetValue("multirom_do_backup", 0);
@@ -980,6 +990,8 @@ void MultiROM::restoreMounts()
 		"    i=$(( $i + 1 ));"
 		"done;");
 
+	system("/sbin/umount_all");
+
 	// script might have mounted it several times over, we _have_ to umount it all
 	system("sync;"
 		"i=0;"
@@ -1199,7 +1211,7 @@ bool MultiROM::flashZip(std::string rom, std::string file)
 	int sideloaded = 0;
 	bool restore_script = false;
 	EdifyHacker hacker;
-	std::string boot, sysimg, loop_device;
+	std::string boot, dtb, sysimg, loop_device;
 	TWPartition *data, *sys;
 
 	gui_print("Flashing ZIP file %s\n", file.c_str());
@@ -1223,12 +1235,18 @@ bool MultiROM::flashZip(std::string rom, std::string file)
 
 	boot = getRomsPath() + rom;
 	normalizeROMPath(boot);
+        dtb = boot;
+        dtb += "/dtb.img";
 	boot += "/boot.img";
 
 	translateToRealdata(file);
 	translateToRealdata(boot);
+	translateToRealdata(dtb);
 
 	if(!fakeBootPartition(boot.c_str()))
+		goto exit;
+
+	if(!fakeDTBPartition(dtb.c_str()))
 		goto exit;
 
 	if(hacker.getProcessFlags() & EDIFY_BLOCK_UPDATES)
@@ -1274,6 +1292,7 @@ exit:
 		gui_print("ZIP successfully installed\n");
 
 	restoreBootPartition();
+	restoreDTBPartition();
 	restoreMounts();
 
 	sideloaded = DataManager::GetIntValue("tw_mrom_sideloaded");
@@ -1779,9 +1798,9 @@ bool MultiROM::createImage(const std::string& base, const char *img, int size)
 	}
 
 	char cmd[256];
-
+//KEK
 	// make_ext4fs errors out if it has unknown path
-	if(TWFunc::Path_Exists("/file_contexts") &&
+	if(TWFunc::Path_Exists("/ffile_contexts") &&
 		(!strcmp(img, "data") ||
 		 !strcmp(img, "system") ||
 		 !strcmp(img, "cache"))) {
@@ -1917,7 +1936,7 @@ bool MultiROM::extractBootForROM(std::string base)
 	char path[256];
 	struct bootimg img;
 
-	gui_print("Extracting contents of boot.img...\n");
+	gui_print("Extracting contents of boot.img...%s\n",(base + "/boot.img").c_str());
 	if(libbootimg_init_load(&img, (base + "/boot.img").c_str(), LIBBOOTIMG_LOAD_RAMDISK) < 0)
 	{
 		gui_print("Failed to load bootimg!\n");
@@ -2889,6 +2908,39 @@ bool MultiROM::fakeBootPartition(const char *fakeImg)
 	return true;
 }
 
+bool MultiROM::fakeDTBPartition(const char *fakeImg)
+{
+        std::string dtb_dev = MR_DTB_DEV;
+	if(access((dtb_dev + "-orig").c_str(), F_OK) >= 0)
+	{
+		gui_print("Failed to fake dtb partition, %s-orig already exists!\n", MR_DTB_DEV);
+		return false;
+	}
+
+	if(access(fakeImg, F_OK) < 0)
+	{
+		int fd = creat(fakeImg, 0644);
+		if(fd < 0)
+		{
+			gui_print("Failed to create fake dtb image file %s (%s)!\n", fakeImg, strerror(errno));
+			return false;
+		}
+		close(fd);
+
+		system_args("dd if=/dev/zero of=\"%s\" count=37 bs=4096", fakeImg);
+		gui_print("Creating empty dtb.img\n");
+	}
+	else
+	{
+	}
+
+	system_args("echo '%s' > /tmp/mrom_fakedtbpart", dtb_dev.c_str());
+	system_args("mv \"%s\" \"%s-orig\"", dtb_dev.c_str(), dtb_dev.c_str());
+	system_args("ln -s \"%s\" \"%s\"", fakeImg, dtb_dev.c_str());
+
+	return true;
+}
+
 void MultiROM::restoreBootPartition()
 {
 #ifdef BOARD_BOOTIMAGE_PARTITION_SIZE
@@ -2917,6 +2969,20 @@ void MultiROM::restoreBootPartition()
 	system_args("rm \"%s\"", m_boot_dev.c_str());
 	system_args("mv \"%s\"-orig \"%s\"", m_boot_dev.c_str(), m_boot_dev.c_str());
 	remove("/tmp/mrom_fakebootpart");
+}
+
+void MultiROM::restoreDTBPartition()
+{
+        std::string m_dtb_dev = MR_DTB_DEV;
+	if(access((m_dtb_dev + "-orig").c_str(), F_OK) < 0)
+	{
+		gui_print("Failed to restore dtb partition, %s-orig does not exist!\n", m_dtb_dev.c_str());
+		return;
+	}
+
+	system_args("rm \"%s\"", m_dtb_dev.c_str());
+	system_args("mv \"%s\"-orig \"%s\"", m_dtb_dev.c_str(), m_dtb_dev.c_str());
+	remove("/tmp/mrom_fakedtbpart");
 }
 
 void MultiROM::failsafeCheckPartition(const char *path)

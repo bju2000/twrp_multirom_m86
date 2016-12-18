@@ -220,7 +220,7 @@ int EdifyFunc::replaceOffendings(std::list<EdifyElement*> **parentList, std::lis
 
         static const char * const forbidden_images[] = {
             "radio", "bootloader", "NON-HLOS.bin", "emmc_appsboot.mbn",
-            "rpm.mbn", "logo.bin", "sdi.mbn", "tz.mbn", "sbl1.mbn",
+            "rpm.mbn", "logo.bin", "sdi.mbn", "tz.mbn", "sbl1.mbn", "ldfw","recovery.img",
             NULL
         };
 

@@ -180,7 +180,9 @@ public:
 	static bool patchInit(std::string name);
 	static bool disableFlashKernelAct(std::string name, std::string loc);
 	static bool fakeBootPartition(const char *fakeImg);
+	static bool fakeDTBPartition(const char *fakeImg);
 	static void restoreBootPartition();
+	static void restoreDTBPartition();
 	static void failsafeCheckPartition(const char *path);
 	static bool compareFiles(const char *path1, const char *path2);
 
